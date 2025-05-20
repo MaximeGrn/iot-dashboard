@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Nano Dashboard</title>
+
+  <script src="./libs/mqtt.min.js"                         defer></script>
+  <script src="./libs/chart.min.js"                        defer></script>
+  <script src="./libs/chartjs-adapter-date-fns.min.js"     defer></script>
+  <!-- optionnel -->
+<!-- <script src="./libs/chartjs-chart-gauge.min.js" defer></script> -->
+  <script src="dashboard.js" defer></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Police plus moderne */
+      background-color: #f0f2f5; /* Fond légèrement différent */
+      color: #333; /* Couleur de texte principale */
+      line-height: 1.6;
+    }
+
+    #dashboard {
+      padding: 20px; /* Augmentation du padding */
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px; /* Augmentation de l'espacement */
+      justify-content: center; /* Centrer les cartes si l'espace le permet */
+    }
+
+    .nano-card {
+      background-color: #ffffff; /* Fond blanc pur */
+      border-radius: 12px; /* Bords plus arrondis */
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); /* Ombre plus douce et diffuse */
+      width: 350px; /* Légère augmentation de la largeur */
+      padding: 18px; /* Augmentation du padding interne */
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; /* Transition pour le survol */
+    }
+
+    .nano-card:hover {
+      transform: translateY(-5px); /* Léger décalage vers le haut au survol */
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12); /* Ombre plus prononcée au survol */
+    }
+
+    .nano-card h3 {
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: 1.2em;
+      color: #1a73e8; /* Couleur accent pour les titres */
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .status {
+      font-size: 0.8em;
+      font-weight: normal;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    /* Les couleurs spécifiques pour online/offline seront gérées par JS, mais on peut définir une base */
+    .status.online { /* Classe à ajouter dynamiquement si besoin */
+      background-color: #e6f4ea;
+      color: #34a853;
+    }
+
+    .status.offline { /* Classe à ajouter dynamiquement si besoin */
+      background-color: #fce8e6;
+      color: #ea4335;
+    }
+
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); /* Grille responsive */
+      gap: 8px; /* Espacement dans la grille */
+      margin-bottom: 12px; /* Marge avant le canvas */
+    }
+
+    .metrics-grid > div { /* Style pour chaque élément de la métrique */
+      background-color: #f8f9fa;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 0.9em;
+    }
+
+    .metric-label {
+      font-weight: 600;
+      color: #5f6368; /* Couleur plus douce pour les labels */
+    }
+
+    .metric-value {
+      color: #202124; /* Couleur pour les valeurs */
+    }
+
+    canvas {
+      margin-top: auto; /* Pousse le canvas en bas si la carte grandit */
+      border: 1px solid #dee2e6; /* Bordure plus subtile */
+      border-radius: 8px;
+      width: 100%; /* S'assurer que le canvas prend toute la largeur */
+      height: 200px; /* Hauteur fixe pour le canvas */
+    }
+
+    /* Style pour le placeholder et le message Nano1 */
+    #dashboard > p {
+        width: 100%;
+        text-align: center;
+        font-size: 1.1em;
+        color: #5f6368;
+    }
+
+    #dashboard > p[style*="color:#d33"] { /* Style spécifique pour le message d'erreur Nano1 */
+        font-weight: bold;
+        color: #ea4335 !important; /* Surcharge la couleur avec une plus vive */
+        background-color: #fce8e6;
+        padding: 10px;
+        border-radius: 8px;
+        margin: 10px 0; /* Marge pour le distinguer */
+    }
+
+  </style>
+</head>
+<body>
+  <div id="dashboard"></div>
+</body>
+</html>
