@@ -106,8 +106,14 @@
     const chart = new Chart(card.querySelector('canvas').getContext('2d'), {
       type: 'line',
       data: { datasets: cachedNodeData?.datasetsData || [] }, // Utiliser les données du cache pour les datasets
-      options: { animation:false,responsive:true,maintainAspectRatio:false,
-        scales:{x:{type:'time',time:{unit:'minute'}},y:{beginAtZero:true}},plugins:{legend:{display:true}} }
+      options: {
+        animation: false,
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 2,
+        scales: { x: { type: 'time', time: { unit: 'minute' } }, y: { beginAtZero: true } },
+        plugins: { legend: { display: true } }
+      }
     });
 
     const node = {
@@ -152,7 +158,7 @@
       // Comportement par défaut pour un nouveau noeud sans cache (peut-être le marquer comme déconnecté initialement)
       updateStatus(node, false);
     }
-
+    sortNanoCards(); // Trier après la création ou la restauration d'une carte
     nodes[key] = node;
     return node;
   }
@@ -205,13 +211,13 @@
     const el = node.statusEl;
     if (online) {
       const dur = fmtDuration(Date.now() - node.connectedSince);
-      el.textContent = `🟢 connecté·e depuis ${dur}`;
+      el.textContent = `🟢 connectée depuis ${dur}`;
       el.style.color = '#2a9d3c';
       node.card.classList.remove('offline'); // CSS class for styling
       node.card.classList.add('online');
     } else {
       const dur = fmtDuration(Date.now() - (node.lastSeen || Date.now())); // Utiliser Date.now() si lastSeen est null
-      el.textContent = `🔴 déconnecté·e depuis ${dur}`;
+      el.textContent = `🔴 déconnectée depuis ${dur}`;
       el.style.color = '#d33';
       node.card.classList.remove('online');
       node.card.classList.add('offline');
@@ -323,13 +329,25 @@
     } else if (hasCache && placeholder.parentNode) {
         placeholder.remove();
     }
-
+    // sortNanoCards(); // Déjà appelé dans createNodeCard, mais un tri final ici pourrait être utile si l'ordre initial du localStorage n'est pas garanti.
+    // En fait, createNodeCard appelant sortNanoCards à chaque fois devrait suffire.
   }
 
   function saveAllNodesToCache() {
     for (const nodeKey in nodes) {
       saveNodeToCache(nodeKey);
     }
+  }
+
+  /* === CARD SORTING ================================================= */
+  function sortNanoCards() {
+    const nanoCards = Array.from(dashboard.querySelectorAll('.nano-card'));
+    nanoCards.sort((a, b) => {
+      const idA = parseInt(a.querySelector('h3').textContent.match(/nano(\d+)/i)?.[1] || '0');
+      const idB = parseInt(b.querySelector('h3').textContent.match(/nano(\d+)/i)?.[1] || '0');
+      return idA - idB;
+    });
+    nanoCards.forEach(card => dashboard.appendChild(card)); // Ré-ajoute dans l'ordre
   }
 
 })();
