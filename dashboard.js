@@ -1,353 +1,214 @@
 /*
- * dashboard.js  —  v3
+ * dashboard.js  —  v4
  * -------------------------------------------------------------
- * • Ne gère que la syntaxe `nano<N>/telemetry` (sans slash).
- * • Message global si **nano1** jamais vu ou perdu.
- * • Pour chaque Nano : badge « Connecté depuis … » ou
- *   « Déconnecté depuis … » mis à jour toutes les 30 s.
+ * • Syntaxe reconnue : `nano<N>/telemetry` (sans slash).
+ * • Affiche l'**heure** de connexion/déconnexion (HH:mm:ss) au lieu de la durée.
+ * • Sonde l'état toutes les 1 s ; TIMEOUT = 3 s sans trame ➜ hors‑ligne.
+ * • Corrige le bug où le statut restait fantôme (online/offline) malgré le flux.
+ *   → on maintient une machine d'état explicite {online, offline}.
  */
 
 (() => {
   /* === CONFIG ========================================================== */
   const brokerUrl   = 'ws://10.42.0.1:9001/mqtt';
   const credentials = { username: 'maxime', password: 'Eseo2025' };
-  const CHECK_EVERY = 10_000;          // pas de rafraîchissement (ms)
-  const TIMEOUT     = CHECK_EVERY + 1; // délai avant « déconnecté » (ms)
+  const CHECK_EVERY = 1_000;           // vérif chaque seconde
+  const TIMEOUT     = 3_000;           // au‑delà de 3 s sans trame ➜ offline
 
-  /* === DOM ELEMENTS ==================================================== */
-  const dashboard   = document.getElementById('dashboard');
-
-  // Placeholder général tant qu'aucun Nano n'a parlé
-  const placeholder = Object.assign(document.createElement('p'), {
-    textContent: '🔄 En attente de données MQTT…',
-    style: 'font:16px system-ui,sans-serif;opacity:.7;margin:1rem'
-  });
+  /* === DOM ============================================================ */
+  const dashboard = document.getElementById('dashboard');
+  const placeholder = createMsg('🔄 En attente de données MQTT…');
   dashboard.appendChild(placeholder);
-
-  // Message spécial pour la Nano 1
-  const nano1Info = Object.assign(document.createElement('p'), {
-    textContent: '⚠️  Nano1 non connectée',
-    style: 'font:15px system-ui,sans-serif;color:#d33;margin:0 1rem 1rem'
-  });
+  const nano1Info = createMsg('⚠️ Nano1 non connecté', '#d33');
   dashboard.appendChild(nano1Info);
 
+  // Bouton de suppression du cache
+  const clearCacheButton = document.createElement('button');
+  clearCacheButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-cookie"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/><path d="M8.5 8.5v.01"/><path d="M16 15.5v.01"/><path d="M12 12v.01"/><path d="M11 17a1 1 0 0 0 1 1 1 1 0 0 0 1-1v-.01"/><path d="M7 14a1 1 0 0 0 1 1 1 1 0 0 0 1-1v-.01"/></svg> <span>Vider le cache</span>';
+  clearCacheButton.setAttribute('id', 'clearCacheBtn');
+  clearCacheButton.onclick = () => {
+    if (confirm("Êtes-vous sûr de vouloir vider le cache du site ? Cela supprimera toutes les données stockées localement par ce site.")) {
+      localStorage.clear();
+      sessionStorage.clear();
+      // Supprimer les cookies spécifiques au site (plus complexe, nécessite de connaître les noms des cookies)
+      // Pour une suppression plus générale, on informe l'utilisateur.
+      alert("Cache local et de session vidé. Pour une suppression complète des cookies, veuillez le faire via les paramètres de votre navigateur.");
+      location.reload(true); // Recharge la page en ignorant le cache du navigateur
+    }
+  };
+  document.body.insertBefore(clearCacheButton, document.body.firstChild);
+
+  function createMsg(txt, color='#000') {
+    const p = document.createElement('p');
+    p.textContent = txt;
+    p.style.cssText = `font:15px system-ui,sans-serif;color:${color};margin:0 1rem 1rem;opacity:.8`;
+    return p;
+  }
+
   /* === STATE =========================================================== */
-  const nodes = {}; // key → { card, statusEl, lastSeen, connectedSince }
+  const nodes = {};
+  // node = { key, card, metricsWrap, statusEl, chart, datasets, lastSeen, connectedAt, disconnectedAt, online }
 
   /* === MQTT ============================================================ */
   const client = mqtt.connect(brokerUrl, credentials);
 
   client.on('connect', () => {
     console.log('[dashboard] MQTT connected');
-    // Charger les nœuds depuis localStorage avant de s'abonner
-    loadNodesFromCache();
-    client.subscribe('#'); // on écoute tout
+    client.subscribe('#');
   });
 
-  client.on('message', (topic, payloadBuf) => {
+  client.on('message', (topic, payload, packet) => {
     const m = /^nano(\d+)\/telemetry$/.exec(topic);
-    if (!m) return; // ignore les autres topics
+    if (!m) return;
 
-    const nanoId  = m[1];
-    const nodeKey = `nano${nanoId}`;
-
+    const nanoId = m[1];
+    const key = `nano${nanoId}`;
     let data;
-    try { data = JSON.parse(payloadBuf.toString()); }
-    catch { return console.warn('payload JSON invalide', payloadBuf.toString()); }
+    try { data = JSON.parse(payload.toString()); }
+    catch { return console.warn('payload JSON invalide :', payload.toString()); }
 
     if (placeholder.parentNode) placeholder.remove();
 
-    const node = nodes[nodeKey] ?? createNodeCard(nodeKey);
+    const node = nodes[key] ?? createNodeCard(key);
+    const now = Date.now();
 
-    // Marquage de présence
-    if (!node.connectedSince) node.connectedSince = Date.now();
-    node.lastSeen = Date.now();
-    updateStatus(node, true);
+    node.lastSeen = now;
 
-    updateMetrics(node, data);
-    saveNodeToCache(nodeKey); // Sauvegarder après mise à jour
+    if (!packet.retain) {
+      if (!node.online) {
+        node.online = true;
+        node.connectedAt = now;
+        node.disconnectedAt = null;
+      }
+    }
 
-    // Gestion du message nano1
-    if (nodeKey === 'nano1') nano1Info.remove();
+    updateStatus(node);
+    updateMetrics(node, data, now);
+
+    if (key === 'nano1' && nano1Info.parentNode) nano1Info.remove();
   });
 
-  /* === STATUS REFRESH TIMER =========================================== */
+  /* === HEARTBEAT ======================================================= */
   setInterval(() => {
     const now = Date.now();
     for (const node of Object.values(nodes)) {
-      const offline = now - (node.lastSeen || 0) > TIMEOUT;
-      updateStatus(node, !offline);
-      if (offline && node.connectedSince) { // Si déconnecté, reset connectedSince
-        node.connectedSince = null;
+      if (node.online && now - node.lastSeen > TIMEOUT) {
+        node.online = false;
+        node.disconnectedAt = now;
+        node.connectedAt = null;
+        updateStatus(node);
       }
     }
-    saveAllNodesToCache(); // Sauvegarder l'état de tous les nœuds périodiquement
-
-    // Nano1 toujours absente ?
-    if (!nodes.nano1) {
-      // nothing – message déjà visible
-    } else if (Date.now() - nodes.nano1.lastSeen > TIMEOUT) {
+    // nano1 warning
+    if (!nodes.nano1 || (nodes.nano1 && !nodes.nano1.online)) {
       if (!nano1Info.parentNode) dashboard.insertBefore(nano1Info, dashboard.firstChild);
-      nano1Info.textContent = '⚠️  Nano1 déconnectée depuis ' + fmtDuration(Date.now() - nodes.nano1.lastSeen);
+      const t = nodes.nano1?.disconnectedAt ? fmtTime(nodes.nano1.disconnectedAt) : '…';
+      nano1Info.textContent = `⚠️ Nano1 déconnecté depuis ${t}`;
     }
   }, CHECK_EVERY);
 
-  /* === UI FUNCTIONS ==================================================== */
+  /* === UI BUILDERS ===================================================== */
   function createNodeCard(key) {
     const card = document.createElement('section');
     card.className = 'nano-card';
-    // Le contenu HTML sera rempli avec les données, qu'elles soient nouvelles ou du cache
+
+    let displayName = key; // Default to key
+    if (key === 'nano1') {
+      displayName = 'Moniteur Batterie';
+    } else if (key.startsWith('nano')) {
+      const numberPart = key.substring(4); // Remove "nano"
+      const number = parseInt(numberPart, 10);
+      if (!isNaN(number) && number > 1) {
+        displayName = `Capteur ${number - 1}`;
+      }
+    }
+
+    card.innerHTML = `<h3>${displayName} <span class="status"></span></h3><div class="metrics-grid"></div><canvas></canvas>`;
     dashboard.appendChild(card);
-
-    let cachedNodeData = getNodeFromCache(key);
-
-    card.innerHTML = `<h3>${key} <span class="status"></span></h3><div class="metrics-grid"></div><canvas></canvas>`;
 
     const chart = new Chart(card.querySelector('canvas').getContext('2d'), {
       type: 'line',
-      data: { datasets: cachedNodeData?.datasetsData || [] }, // Utiliser les données du cache pour les datasets
-      options: {
-        animation: false,
-        responsive: true,
-        maintainAspectRatio: true,
-        aspectRatio: 2,
-        scales: { x: { type: 'time', time: { unit: 'minute' } }, y: { beginAtZero: true } },
-        plugins: { legend: { display: true } }
-      }
+      data: { datasets: [] },
+      options: { animation:false,responsive:true,maintainAspectRatio:false,
+        scales:{x:{type:'time',time:{unit:'minute'}},y:{beginAtZero:true}},plugins:{legend:{display:true}} }
     });
 
     const node = {
       key,
       card,
-      metricsWrap : card.querySelector('.metrics-grid'),
-      statusEl    : card.querySelector('.status'),
+      metricsWrap: card.querySelector('.metrics-grid'),
+      statusEl: card.querySelector('.status'),
       chart,
-      datasets    : {}, // Sera peuplé à partir de chart.data.datasets ou lors de updateMetric
-      lastSeen    : cachedNodeData?.lastSeen || null,
-      connectedSince : cachedNodeData?.connectedSince || null
+      datasets: {},
+      lastSeen: 0,
+      connectedAt: null,
+      disconnectedAt: null,
+      online: false
     };
-
-    // Restaurer les datasets dans node.datasets pour la logique existante
-    chart.data.datasets.forEach(ds => {
-        // Trouver la clé de la métrique originale. Peut nécessiter un ajustement si le label n'est pas unique ou formaté.
-        // Pour l'instant, on suppose que le label du dataset est la clé de la métrique.
-        // Cela pourrait être plus robuste en stockant la clé k avec le dataset dans le cache.
-        const metricKey = Object.keys(LABELS).find(k => LABELS[k] === ds.label) || ds.label;
-        node.datasets[metricKey] = ds;
-    });
-
-    // Restaurer les valeurs des métriques affichées si des données cachées existent
-    if (cachedNodeData?.metrics) {
-        for (const [k, metricData] of Object.entries(cachedNodeData.metrics)) {
-            const { value, textOnly, ts } = metricData;
-            // Recréer l'élément de métrique DOM si nécessaire (similaire à updateMetric)
-            let el = node.metricsWrap.querySelector(`[data-k="${k}"]`);
-            if (!el) {
-                el = document.createElement('div');
-                el.dataset.k = k;
-                const label = LABELS[k] || k;
-                el.innerHTML = `<span class="metric-label">${label}: </span><span class="metric-value"></span>`;
-                node.metricsWrap.appendChild(el);
-            }
-            el.querySelector('.metric-value').textContent = textOnly ? value : fmtValue(k, Number(value));
-        }
-    }
-     if (cachedNodeData) {
-      updateStatus(node, (Date.now() - (cachedNodeData.lastSeen || 0) <= TIMEOUT));
-    } else {
-      // Comportement par défaut pour un nouveau noeud sans cache (peut-être le marquer comme déconnecté initialement)
-      updateStatus(node, false);
-    }
-    sortNanoCards(); // Trier après la création ou la restauration d'une carte
     nodes[key] = node;
+    updateStatus(node);
     return node;
   }
 
-  function updateMetrics(node, data) {
-    const ts = Date.now();
-
-    // Prox fusionné
-    if ('prox1' in data || 'prox2' in data || 'prox3' in data) {
-      const str = ['prox1','prox2','prox3'].map(k=>data[k]).filter(v=>v!==undefined).join(' / ');
-      if (str) updateMetric(node,'proximity',str,ts,{textOnly:true});
+  function updateStatus(node) {
+    const el = node.statusEl;
+    if (node.online) {
+      el.textContent = `🟢 Connecté depuis ${fmtTime(node.connectedAt)}`;
+      el.style.color = '#2a9d3c';
+      node.card.classList.add('online');
+      node.card.classList.remove('offline');
+    } else {
+      el.textContent = `🔴 Déconnecté depuis ${fmtTime(node.disconnectedAt)}`;
+      el.style.color = '#d33';
+      node.card.classList.add('offline');
+      node.card.classList.remove('online');
     }
+  }
+
+  /* === METRICS ========================================================= */
+  function updateMetrics(node, data, ts) {
+    // Fusion prox
+    const prox = ['prox1','prox2','prox3'].map(k=>data[k]).filter(v=>v!==undefined);
+    if (prox.length) updateMetric(node,'proximity',prox.join(' / '),ts,{textOnly:true});
 
     for (const [k,v] of Object.entries(data)) {
       if (k.startsWith('prox')) continue;
       updateMetric(node,k,v,ts);
     }
-    saveNodeToCache(node.key); // Sauvegarder après la mise à jour des métriques
   }
 
   function updateMetric(node,k,raw,ts,{textOnly=false}={}) {
-    const val = Number(raw);
     const label = LABELS[k] || k;
     let el = node.metricsWrap.querySelector(`[data-k="${k}"]`);
-
     if (!el) {
       el = document.createElement('div');
       el.dataset.k = k;
       el.innerHTML = `<span class="metric-label">${label}: </span><span class="metric-value"></span>`;
       node.metricsWrap.appendChild(el);
-
       if (!textOnly) {
         const ds = { label, data: [], borderColor: randColor(), borderWidth:1, tension:.25, pointRadius:0 };
         node.chart.data.datasets.push(ds);
         node.datasets[k] = ds;
       }
     }
-
-    el.querySelector('.metric-value').textContent = textOnly ? raw : fmtValue(k,val);
+    el.querySelector('.metric-value').textContent = textOnly ? raw : fmtValue(k, Number(raw));
 
     if (!textOnly) {
       const ds = node.datasets[k];
-      ds.data.push({ x: ts, y: val });
+      ds.data.push({ x: ts, y: Number(raw) });
       if (ds.data.length > 3600) ds.data.shift();
       node.chart.update('none');
     }
   }
 
-  function updateStatus(node, online) {
-    const el = node.statusEl;
-    if (online) {
-      const dur = fmtDuration(Date.now() - node.connectedSince);
-      el.textContent = `🟢 connectée depuis ${dur}`;
-      el.style.color = '#2a9d3c';
-      node.card.classList.remove('offline'); // CSS class for styling
-      node.card.classList.add('online');
-    } else {
-      const dur = fmtDuration(Date.now() - (node.lastSeen || Date.now())); // Utiliser Date.now() si lastSeen est null
-      el.textContent = `🔴 déconnectée depuis ${dur}`;
-      el.style.color = '#d33';
-      node.card.classList.remove('online');
-      node.card.classList.add('offline');
-      if (node.connectedSince) node.connectedSince = null; // Réinitialiser si marqué hors ligne
-    }
-  }
-
   /* === UTILS =========================================================== */
-  const LABELS = { voltage:'Voltage (V)', current:'Current (A)', lux:'Lux (lx)', temp_air:'Temp (°C)', hum_air:'Hum (%)', hum_sol:'Hum Sol (%)', proximity:'Prox 1/2/3' };
+  const LABELS = { voltage:'Tension (V)', current:'Courant (A)', lux:'Luminosité (lx)', temp_air:'Temp. Air (°C)', hum_air:'Hum. Air (%)', hum_sol:'Hum. Sol (%)', proximity:'Proximité 1/2/3' };
   const DEC = { voltage:2, current:2, temp_air:1 };
   const fmtValue = (k,v)=>v.toFixed(DEC[k]??0);
   const randColor = ()=>`hsl(${Math.floor(Math.random()*360)},70%,50%)`;
-
-  function fmtDuration(ms) {
-    const sec = Math.floor(ms/1000);
-    const min = Math.floor(sec/60);
-    const s   = sec%60;
-    return `${min?min+'min':''}${min&&s? '':''}${s? s+'s':''}` || '0s';
-  }
-
-  /* === CACHE FUNCTIONS ================================================= */
-  const CACHE_PREFIX = 'nanoDashboard_';
-
-  function saveNodeToCache(nodeKey) {
-    const node = nodes[nodeKey];
-    if (!node) return;
-
-    const metricsToSave = {};
-    node.metricsWrap.querySelectorAll('[data-k]').forEach(el => {
-        const k = el.dataset.k;
-        const valueEl = el.querySelector('.metric-value');
-        // On a besoin de savoir si la métrique est textOnly pour la restauration
-        // On va supposer pour l'instant que si node.datasets[k] n'existe pas, c'est textOnly
-        // ou que l'on stocke la valeur brute affichée.
-        // Une meilleure approche serait de stocker explicitement le type ou la valeur brute originale.
-        const isTextOnly = !node.datasets[k]; // Approximation
-        metricsToSave[k] = {
-            value: valueEl.textContent, // Sauvegarde la valeur affichée
-            textOnly: isTextOnly // Peut nécessiter un ajustement
-        };
-    });
-
-    const datasetsData = node.chart.data.datasets.map(ds => ({
-      label: ds.label,
-      data: ds.data, // Sauvegarde les points de données {x,y}
-      borderColor: ds.borderColor,
-      borderWidth: ds.borderWidth,
-      tension: ds.tension,
-      pointRadius: ds.pointRadius,
-      // important: stocker aussi la clé de la métrique associée si elle est différente du label
-      metricKey: Object.keys(node.datasets).find(key => node.datasets[key] === ds) || ds.label
-    }));
-
-
-    const dataToSave = {
-      lastSeen: node.lastSeen,
-      connectedSince: node.connectedSince,
-      datasetsData: datasetsData, // chart.js dataset structure
-      metrics: metricsToSave // Sauvegarde les valeurs des métriques
-    };
-    try {
-      localStorage.setItem(CACHE_PREFIX + nodeKey, JSON.stringify(dataToSave));
-    } catch (e) {
-      console.error('Erreur lors de la sauvegarde du cache pour', nodeKey, e);
-      // Potentiellement, le quota localStorage est dépassé.
-    }
-  }
-
-  function getNodeFromCache(nodeKey) {
-    const cached = localStorage.getItem(CACHE_PREFIX + nodeKey);
-    if (cached) {
-      try {
-        return JSON.parse(cached);
-      } catch (e) {
-        console.error('Erreur lors du parsing du cache pour', nodeKey, e);
-        localStorage.removeItem(CACHE_PREFIX + nodeKey); // Supprimer le cache corrompu
-        return null;
-      }
-    }
-    return null;
-  }
-
-  function loadNodesFromCache() {
-    if (placeholder.parentNode) placeholder.remove(); // Cacher le message "En attente"
-    let hasCache = false;
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key.startsWith(CACHE_PREFIX)) {
-        const nodeKey = key.substring(CACHE_PREFIX.length);
-        // createNodeCard va lire du cache, donc on l'appelle.
-        // Il faut s'assurer que createNodeCard ne recrée pas un noeud si déjà dans `nodes`
-        // ce qui ne devrait pas arriver ici car `nodes` est vide initialement.
-        if (!nodes[nodeKey]) {
-             createNodeCard(nodeKey); // Ceci va utiliser getNodeFromCache
-             hasCache = true;
-        }
-      }
-    }
-    if (hasCache && nodes.nano1 && (Date.now() - (nodes.nano1.lastSeen || 0) <= TIMEOUT)) {
-        nano1Info.remove();
-    } else if (!nodes.nano1 && nano1Info.parentNode == null) { // Si nano1 pas dans cache et message pas là
-        dashboard.insertBefore(nano1Info, dashboard.firstChild);
-        nano1Info.textContent = '⚠️  Nano1 non connectée (aucune donnée en cache)';
-    }
-    // Si placeholder toujours là et pas de cache, il reste. S'il y a du cache, il est enlevé.
-    if (!hasCache && placeholder.parentNode == null && Object.keys(nodes).length === 0) {
-        dashboard.appendChild(placeholder);
-        placeholder.textContent = '🔄 Aucune donnée en cache, en attente de données MQTT…';
-    } else if (hasCache && placeholder.parentNode) {
-        placeholder.remove();
-    }
-    // sortNanoCards(); // Déjà appelé dans createNodeCard, mais un tri final ici pourrait être utile si l'ordre initial du localStorage n'est pas garanti.
-    // En fait, createNodeCard appelant sortNanoCards à chaque fois devrait suffire.
-  }
-
-  function saveAllNodesToCache() {
-    for (const nodeKey in nodes) {
-      saveNodeToCache(nodeKey);
-    }
-  }
-
-  /* === CARD SORTING ================================================= */
-  function sortNanoCards() {
-    const nanoCards = Array.from(dashboard.querySelectorAll('.nano-card'));
-    nanoCards.sort((a, b) => {
-      const idA = parseInt(a.querySelector('h3').textContent.match(/nano(\d+)/i)?.[1] || '0');
-      const idB = parseInt(b.querySelector('h3').textContent.match(/nano(\d+)/i)?.[1] || '0');
-      return idA - idB;
-    });
-    nanoCards.forEach(card => dashboard.appendChild(card)); // Ré-ajoute dans l'ordre
-  }
-
+  const fmtTime = t => {
+    if (!t) return '…';
+    const d = new Date(t);
+    return d.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  };
 })();
