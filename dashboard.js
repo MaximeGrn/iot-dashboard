@@ -103,7 +103,7 @@
     if (!nodes.nano1 || (nodes.nano1 && !nodes.nano1.online)) {
       if (!nano1Info.parentNode) dashboard.insertBefore(nano1Info, dashboard.firstChild);
       const t = nodes.nano1?.disconnectedAt ? fmtTime(nodes.nano1.disconnectedAt) : '…';
-      nano1Info.textContent = `⚠️ Nano1 déconnecté depuis ${t}`;
+      nano1Info.textContent = `⚠️ Moniteur Batterie déconnecté depuis ${t}`;
     }
   }, CHECK_EVERY);
 
@@ -113,23 +113,42 @@
     card.className = 'nano-card';
 
     let displayName = key; // Default to key
+    let cardOrder = Infinity; // Default order for non-specified cards
+
     if (key === 'nano1') {
       displayName = 'Moniteur Batterie';
+      cardOrder = 1;
     } else if (key.startsWith('nano')) {
       const numberPart = key.substring(4); // Remove "nano"
       const number = parseInt(numberPart, 10);
       if (!isNaN(number) && number > 1) {
         displayName = `Capteur ${number - 1}`;
+        cardOrder = number; // nano2 will be 2, nano3 will be 3, etc.
       }
     }
+    card.dataset.order = cardOrder; // Stocker l'ordre pour le tri
 
     card.innerHTML = `<h3>${displayName} <span class="status"></span></h3><div class="metrics-grid"></div><canvas></canvas>`;
-    dashboard.appendChild(card);
+
+    // Insertion ordonnée des cartes
+    const existingCards = Array.from(dashboard.querySelectorAll('.nano-card'));
+    let inserted = false;
+    for (const existingCard of existingCards) {
+      const existingOrder = parseInt(existingCard.dataset.order, 10);
+      if (cardOrder < existingOrder) {
+        dashboard.insertBefore(card, existingCard);
+        inserted = true;
+        break;
+      }
+    }
+    if (!inserted) {
+      dashboard.appendChild(card);
+    }
 
     const chart = new Chart(card.querySelector('canvas').getContext('2d'), {
       type: 'line',
       data: { datasets: [] },
-      options: { animation:false,responsive:true,maintainAspectRatio:false,
+      options: { animation:false,responsive:true,maintainAspectRatio:true,
         scales:{x:{type:'time',time:{unit:'minute'}},y:{beginAtZero:true}},plugins:{legend:{display:true}} }
     });
 
@@ -153,12 +172,12 @@
   function updateStatus(node) {
     const el = node.statusEl;
     if (node.online) {
-      el.textContent = `🟢 Connecté depuis ${fmtTime(node.connectedAt)}`;
+      el.textContent = `🟢 CTouoionnecté depuis ${fmtTime(node.connectedAt)}`;
       el.style.color = '#2a9d3c';
       node.card.classList.add('online');
       node.card.classList.remove('offline');
     } else {
-      el.textContent = `🔴 Déconnecté depuis ${fmtTime(node.disconnectedAt)}`;
+      el.textContent = `🔴 Décrrronnecté depuis ${fmtTime(node.disconnectedAt)}`;
       el.style.color = '#d33';
       node.card.classList.add('offline');
       node.card.classList.remove('online');
