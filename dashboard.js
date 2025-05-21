@@ -184,7 +184,6 @@
 
   /* === METRICS ========================================================= */
   function updateMetrics(node, data, ts) {
-    // Fusion prox
     const prox = ['prox1','prox2','prox3'].map(k=>data[k]).filter(v=>v!==undefined);
     if (prox.length) updateMetric(node,'proximity',prox.join(' / '),ts,{textOnly:true});
 
@@ -192,10 +191,15 @@
       if (k.startsWith('prox') || k === 'datetime_str') continue;
       updateMetric(node,k,v,ts);
     }
+
+    if (node.key === 'nano1' && data.current !== undefined) {
+      const statusText = Number(data.current) > 1 ? 'Charge en cours' : 'Utilisation en cours';
+      updateMetric(node, 'battery_status', statusText, ts, { textOnly: true, customLabel: 'État Batterie' });
+    }
   }
 
-  function updateMetric(node,k,raw,ts,{textOnly=false}={}) {
-    const label = LABELS[k] || k;
+  function updateMetric(node,k,raw,ts,{textOnly=false, customLabel=null}={}) {
+    const label = customLabel || LABELS[k] || k;
     let metricDisplayEl = node.metricsWrap.querySelector(`[data-k="${k}"]`);
     if (!metricDisplayEl) {
       metricDisplayEl = document.createElement('div');
@@ -219,7 +223,7 @@
             datasets: [{
               label: label,
               data: [],
-              borderColor: randColor(),
+              borderColor: METRIC_COLORS[k] || randColor(),
               borderWidth:1,
               tension:.25,
               pointRadius:0
@@ -261,6 +265,14 @@
   /* === UTILS =========================================================== */
   const LABELS = { voltage:'Tension (V)', current:'Courant (A)', lux:'Luminosité (lx)', temp_air:'Temp. Air (°C)', hum_air:'Hum. Air (%)', hum_sol:'Hum. Sol (%)', proximity:'Proximité 1/2/3' };
   const DEC = { voltage:2, current:2, temp_air:1 };
+  const METRIC_COLORS = {
+    voltage: '#FFD700', // Gold
+    current: '#4682B4', // SteelBlue
+    lux: '#FFA500',     // Orange
+    temp_air: '#007BFF', // Blue
+    hum_air: '#32CD32',  // LimeGreen
+    hum_sol: '#8B4513'   // SaddleBrown
+  };
   const fmtValue = (k,v)=>v.toFixed(DEC[k]??0);
   const randColor = ()=>`hsl(${Math.floor(Math.random()*360)},70%,50%)`;
   const fmtTime = t => {
