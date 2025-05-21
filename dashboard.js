@@ -172,12 +172,12 @@
   function updateStatus(node) {
     const el = node.statusEl;
     if (node.online) {
-      el.textContent = `🟢 CTouoionnecté depuis ${fmtTime(node.connectedAt)}`;
+      el.textContent = `🟢 Connecté depuis ${fmtTime(node.connectedAt)}`;
       el.style.color = '#2a9d3c';
       node.card.classList.add('online');
       node.card.classList.remove('offline');
     } else {
-      el.textContent = `🔴 Décrrronnecté depuis ${fmtTime(node.disconnectedAt)}`;
+      el.textContent = `🔴 Déconnecté depuis ${fmtTime(node.disconnectedAt)}`;
       el.style.color = '#d33';
       node.card.classList.add('offline');
       node.card.classList.remove('online');
