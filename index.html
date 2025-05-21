@@ -17,7 +17,40 @@
       background-color: #f0f2f5; /* Fond légèrement différent */
       color: #333; /* Couleur de texte principale */
       line-height: 1.6;
-      padding-top: 60px; /* Espace pour le bouton de cache et le widget météo */
+      padding-top: 70px; /* Augmenté pour faire de la place aux boutons de nav + cache */
+    }
+
+    .navigation-buttons {
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1001;
+      background-color: rgba(255, 255, 255, 0.95);
+      padding: 8px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      display: flex;
+      gap: 10px;
+    }
+    .navigation-buttons button {
+      padding: 8px 15px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      background-color: #f8f8f8;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      color: #333;
+      transition: background-color 0.2s ease;
+    }
+    .navigation-buttons button:hover {
+      background-color: #e7e7e7;
+    }
+    .navigation-buttons button.active {
+      background-color: #1a73e8;
+      color: white;
+      border-color: #1a73e8;
     }
 
     #clearCacheBtn {
@@ -47,13 +80,6 @@
       width: 18px; /* Taille d'icône réduite */
       height: 18px;
       margin-right: 4px;
-    }
-
-    #weather-widget-container {
-        position: fixed; 
-        top: 10px; 
-        right: 10px; 
-        z-index: 999; /* Légèrement inférieur au bouton de cache si jamais */
     }
 
     #dashboard {
@@ -166,8 +192,9 @@
   </style>
 </head>
 <body>
-  <div id="weather-widget-container">
-    <iframe src="https://meteofrance.com/widget/prevision/212310" style="width:270px;height:180px;border-radius:8px;border:1px solid #ccc;box-shadow: 0 2px 5px rgba(0,0,0,0.1);" allowfullscreen></iframe>
+  <div class="navigation-buttons">
+    <button onclick="location.href='index.html'" class="active">Dashboard</button>
+    <button onclick="location.href='meteo.html'">Météo</button>
   </div>
   <div id="dashboard"></div>
 </body>
