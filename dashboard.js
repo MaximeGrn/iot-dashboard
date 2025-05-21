@@ -19,8 +19,13 @@
   const dashboard = document.getElementById('dashboard');
   const placeholder = createMsg('🔄 En attente de données MQTT…');
   dashboard.appendChild(placeholder);
-  const nano1Info = createMsg('⚠️ Nano1 non connecté', '#d33');
+  const nano1Info = createMsg('⚠️ Moniteur Batterie non connecté', '#d33');
   dashboard.appendChild(nano1Info);
+
+  // Définir la locale par défaut pour Chart.js
+  if (typeof Chart !== 'undefined') {
+    Chart.defaults.locale = 'fr-FR';
+  }
 
   // Bouton de suppression du cache
   const clearCacheButton = document.createElement('button');
@@ -47,7 +52,7 @@
 
   /* === STATE =========================================================== */
   const nodes = {};
-  // node = { key, card, metricsWrap, statusEl, chart, datasets, lastSeen, connectedAt, disconnectedAt, online }
+  // node = { key, card, metricsWrap, statusEl, chartsContainer, charts, lastSeen, connectedAt, disconnectedAt, online }
 
   /* === MQTT ============================================================ */
   const client = mqtt.connect(brokerUrl, credentials);
@@ -128,7 +133,7 @@
     }
     card.dataset.order = cardOrder; // Stocker l'ordre pour le tri
 
-    card.innerHTML = `<h3>${displayName} <span class="status"></span></h3><div class="metrics-grid"></div><canvas></canvas>`;
+    card.innerHTML = `<h3>${displayName} <span class="status"></span></h3><div class="metrics-grid"></div><div class="charts-container"></div>`;
 
     // Insertion ordonnée des cartes
     const existingCards = Array.from(dashboard.querySelectorAll('.nano-card'));
@@ -142,23 +147,16 @@
       }
     }
     if (!inserted) {
-      dashboard.appendChild(card);
+    dashboard.appendChild(card);
     }
-
-    const chart = new Chart(card.querySelector('canvas').getContext('2d'), {
-      type: 'line',
-      data: { datasets: [] },
-      options: { animation:false,responsive:true,maintainAspectRatio:true,
-        scales:{x:{type:'time',time:{unit:'minute'}},y:{beginAtZero:true}},plugins:{legend:{display:true}} }
-    });
 
     const node = {
       key,
       card,
       metricsWrap: card.querySelector('.metrics-grid'),
       statusEl: card.querySelector('.status'),
-      chart,
-      datasets: {},
+      chartsContainer: card.querySelector('.charts-container'),
+      charts: {},
       lastSeen: 0,
       connectedAt: null,
       disconnectedAt: null,
@@ -191,32 +189,72 @@
     if (prox.length) updateMetric(node,'proximity',prox.join(' / '),ts,{textOnly:true});
 
     for (const [k,v] of Object.entries(data)) {
-      if (k.startsWith('prox')) continue;
+      if (k.startsWith('prox') || k === 'datetime_str') continue;
       updateMetric(node,k,v,ts);
     }
   }
 
   function updateMetric(node,k,raw,ts,{textOnly=false}={}) {
     const label = LABELS[k] || k;
-    let el = node.metricsWrap.querySelector(`[data-k="${k}"]`);
-    if (!el) {
-      el = document.createElement('div');
-      el.dataset.k = k;
-      el.innerHTML = `<span class="metric-label">${label}: </span><span class="metric-value"></span>`;
-      node.metricsWrap.appendChild(el);
-      if (!textOnly) {
-        const ds = { label, data: [], borderColor: randColor(), borderWidth:1, tension:.25, pointRadius:0 };
-        node.chart.data.datasets.push(ds);
-        node.datasets[k] = ds;
-      }
+    let metricDisplayEl = node.metricsWrap.querySelector(`[data-k="${k}"]`);
+    if (!metricDisplayEl) {
+      metricDisplayEl = document.createElement('div');
+      metricDisplayEl.dataset.k = k;
+      metricDisplayEl.innerHTML = `<span class="metric-label">${label}: </span><span class="metric-value"></span>`;
+      node.metricsWrap.appendChild(metricDisplayEl);
     }
-    el.querySelector('.metric-value').textContent = textOnly ? raw : fmtValue(k, Number(raw));
+    metricDisplayEl.querySelector('.metric-value').textContent = textOnly ? raw : fmtValue(k, Number(raw));
 
-    if (!textOnly) {
-      const ds = node.datasets[k];
-      ds.data.push({ x: ts, y: Number(raw) });
-      if (ds.data.length > 3600) ds.data.shift();
-      node.chart.update('none');
+    if (!textOnly && k !== 'datetime_str') {
+      let chartInstance = node.charts[k];
+      if (!chartInstance) {
+        const canvas = document.createElement('canvas');
+        canvas.style.height = '150px';
+        canvas.style.width = '100%';
+        node.chartsContainer.appendChild(canvas);
+        
+        const newChart = new Chart(canvas.getContext('2d'), {
+          type: 'line',
+          data: {
+            datasets: [{
+              label: label,
+              data: [],
+              borderColor: randColor(),
+              borderWidth:1,
+              tension:.25,
+              pointRadius:0
+            }]
+          },
+          options: {
+            animation:false,
+            responsive:true,
+            maintainAspectRatio: true,
+            scales:{
+              x:{
+                type:'time',
+                time:{
+                  unit:'minute',
+                  displayFormats: {
+                    minute: 'HH:mm',
+                    hour: 'HH:mm'
+                  }
+                }
+              },
+              y:{beginAtZero:true}
+            },
+            plugins:{
+              legend:{display:true, position: 'top'}
+            }
+          }
+        });
+        node.charts[k] = newChart;
+        chartInstance = newChart;
+      }
+
+      const dataset = chartInstance.data.datasets[0];
+      dataset.data.push({ x: ts, y: Number(raw) });
+      if (dataset.data.length > 300) dataset.data.shift();
+      chartInstance.update('none');
     }
   }
 

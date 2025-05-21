@@ -17,7 +17,7 @@
       background-color: #f0f2f5; /* Fond légèrement différent */
       color: #333; /* Couleur de texte principale */
       line-height: 1.6;
-      position: relative; /* Pour positionner le bouton de cache */
+      padding-top: 60px; /* Espace pour le bouton de cache et le widget météo */
     }
 
     #clearCacheBtn {
@@ -25,26 +25,35 @@
       top: 10px;
       left: 10px;
       z-index: 1000;
-      padding: 8px 12px;
+      padding: 6px 10px; /* Taille réduite */
       background-color: #fff;
       border: 1px solid #ccc;
-      border-radius: 8px;
+      border-radius: 6px; /* Rayon réduit */
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 6px;
-      font-size: 14px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      gap: 5px; /* Espacement réduit */
+      font-size: 13px; /* Taille de police réduite */
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
       transition: background-color 0.2s ease, box-shadow 0.2s ease;
     }
 
     #clearCacheBtn:hover {
       background-color: #f0f0f0;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+      box-shadow: 0 3px 6px rgba(0,0,0,0.15);
     }
 
     #clearCacheBtn svg {
-      margin-right: 5px; /* Espace entre l'icône et le texte */
+      width: 18px; /* Taille d'icône réduite */
+      height: 18px;
+      margin-right: 4px;
+    }
+
+    #weather-widget-container {
+        position: fixed; 
+        top: 10px; 
+        right: 10px; 
+        z-index: 999; /* Légèrement inférieur au bouton de cache si jamais */
     }
 
     #dashboard {
@@ -102,9 +111,9 @@
 
     .metrics-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); /* Grille responsive */
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); /* Légère augmentation pour les valeurs */
       gap: 8px; /* Espacement dans la grille */
-      margin-bottom: 12px; /* Marge avant le canvas */
+      margin-bottom: 15px; /* Plus d'espace avant les graphiques */
     }
 
     .metrics-grid > div { /* Style pour chaque élément de la métrique */
@@ -123,12 +132,18 @@
       color: #202124; /* Couleur pour les valeurs */
     }
 
-    canvas {
-      margin-top: auto; /* Pousse le canvas en bas si la carte grandit */
-      border: 1px solid #dee2e6; /* Bordure plus subtile */
-      border-radius: 8px;
-      width: 100%; /* S'assurer que le canvas prend toute la largeur */
-      height: 200px; /* Hauteur fixe pour le canvas */
+    .charts-container {
+        display: flex;
+        flex-direction: column;
+        gap: 15px; /* Espace entre les graphiques individuels */
+        margin-top: 10px; /* Espace après la grille de métriques textuelles */
+    }
+
+    .charts-container canvas {
+        /* La hauteur est définie en JS (150px), la largeur est 100% par défaut */
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        width: 100%; /* S'assurer que le canvas prend toute la largeur */
     }
 
     /* Style pour le placeholder et le message Nano1 */
@@ -151,6 +166,9 @@
   </style>
 </head>
 <body>
+  <div id="weather-widget-container">
+    <iframe src="https://meteofrance.com/widget/prevision/212310" style="width:270px;height:180px;border-radius:8px;border:1px solid #ccc;box-shadow: 0 2px 5px rgba(0,0,0,0.1);" allowfullscreen></iframe>
+  </div>
   <div id="dashboard"></div>
 </body>
 </html>
