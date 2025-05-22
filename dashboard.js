@@ -270,7 +270,8 @@
       disconnectedAt: null,
       online: false
     };
-    nodes[key] = node; 
+    nodes[key] = node;
+    card.dataset.nanoId = key.substring(4);
     // Ne pas appeler updateStatus ici si on restaure depuis la session, 
     // car loadAndRecreateNodesFromSession le fera après avoir mis les bonnes valeurs.
     // Si ce n'est pas une restauration, MQTT le fera.
@@ -506,8 +507,73 @@
     const d = new Date(t);
     return d.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
   };
-
-  // Charger les nœuds depuis la session au démarrage
+  // Charger les nœuds depuis la session
   loadAndRecreateNodesFromSession();
 
-})();
+  // — Historique au clic sur carte —
+  dashboard.addEventListener('click', async e => {
+    const card = e.target.closest('.nano-card');
+    if (!card) return;
+
+    const nanoId = card.dataset.nanoId;
+    if (!nanoId) return;
+
+    // Rediriger vers une nouvelle page pour tous les nano (y compris nano1)
+    window.location.href = `details_capteur.html?nanoId=${nanoId}`;
+    
+    // L'ancien code pour afficher l'historique directement sur le dashboard n'est plus nécessaire ici
+    // car la page details_capteur.html s'en chargera.
+    /*
+    if (nanoId !== '1') { 
+      window.location.href = `details_capteur.html?nanoId=${nanoId}`;
+    } else {
+      // Comportement existant pour nano1 (Moniteur Batterie)
+      console.log('DEBUG click sur carte nano1', card, 'nanoId=', nanoId);
+      try {
+        const resp = await fetch(`http://${window.location.hostname}:5000/api/last?nano=${nanoId}&n=1000`);
+        if (!resp.ok) {
+          console.error(`Erreur lors de la récupération de l'historique pour nano${nanoId}: ${resp.status}`);
+          return;
+        }
+        const history = await resp.json();
+        showHistory(card, history);
+      } catch (error) {
+        console.error('Erreur de fetch pour l\'historique:', error);
+      }
+    }
+    */
+  });
+
+  // La fonction showHistory peut être conservée si elle est utilisée ailleurs, 
+  // ou supprimée si elle n'était utilisée que pour l'affichage direct sur le dashboard.
+  // Pour l'instant, je la laisse commentée au cas où.
+  /*
+  function showHistory(card, rows) {
+    let hist = card.querySelector('.history');
+    if (hist) hist.remove();
+    hist = document.createElement('div');
+    hist.className = 'history';
+    hist.innerHTML = `<h4>Historique (dernier ${rows.length} points)</h4><canvas></canvas>`;
+    card.appendChild(hist);
+    const ctx = hist.querySelector('canvas').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        datasets: [{
+          label: 'Lux',
+          data: rows.map(r => ({ x: r.ts_device_ms, y: r.lux })),
+          tension: 0.2,
+          pointRadius: 0
+        }]
+      },
+      options: {
+        scales: {
+          x: { type: 'time', time: { unit: 'minute', displayFormats: { minute:'HH:mm' } } },
+          y: { beginAtZero: true }
+        }
+      }
+    });
+  }
+  */
+
+})(); 
