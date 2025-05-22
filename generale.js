@@ -14,6 +14,7 @@
   const CHECK_EVERY = 1_000;           // vérif chaque seconde
   const TIMEOUT     = 3_000;           // au‑delà de 3 s sans trame ➜ offline
   const SAVE_INTERVAL = 3_000;         // sauvegarde dans sessionStorage toutes les 5 secondes
+  const CLEANUP_INTERVAL = 2_000;     // nettoyage des capteurs inactifs toutes les 10 secondes
 
   /* === DOM ============================================================ */
   const averageCard = document.querySelector('#average-container .nano-card');
@@ -193,9 +194,10 @@
     
     // Mise à jour des données du capteur
     if (!sensors[key]) {
-      sensors[key] = { lastSeen: Date.now(), data: {} };
+      sensors[key] = { lastSeen: Date.now(), data: {}, active: true };
     } else {
       sensors[key].lastSeen = Date.now();
+      sensors[key].active = true;
     }
     
     // Stockage des données
@@ -208,20 +210,52 @@
     updateUI();
   });
 
+  /* === NETTOYAGE DES CAPTEURS INACTIFS ================================= */
+  function cleanupInactiveSensors() {
+    const now = Date.now();
+    let changeDetected = false;
+    
+    for (const [key, sensor] of Object.entries(sensors)) {
+      // Marquer explicitement les capteurs inactifs
+      if (now - sensor.lastSeen >= TIMEOUT && sensor.active) {
+        sensor.active = false;
+        changeDetected = true;
+        console.log(`[generale] Capteur ${key} marqué comme inactif`);
+      }
+    }
+    
+    // Si des changements ont été détectés, recalculer les moyennes
+    if (changeDetected) {
+      calculateAverages();
+      updateUI();
+    }
+  }
+  
+  // Nettoyage périodique des capteurs inactifs
+  setInterval(cleanupInactiveSensors, CLEANUP_INTERVAL);
+
   /* === CALCUL DES MOYENNES =================================================== */
   function calculateAverages() {
     const now = Date.now();
     const activeSensors = [];
     
-    // Filtrage des capteurs actifs (vus dans les 3 dernières secondes)
+    // Filtrage des capteurs actifs avec vérification stricte
     for (const [key, sensor] of Object.entries(sensors)) {
+      // Vérification stricte: timestamp récent ET marqué comme actif
       if (now - sensor.lastSeen < TIMEOUT) {
+        sensor.active = true; // S'assurer que l'état est correct
         activeSensors.push(sensor);
+      } else {
+        // Marquer explicitement comme inactif
+        sensor.active = false;
       }
     }
     
+    // Vérification du nombre réel de capteurs actifs
+    const realActiveSensorsCount = Object.values(sensors).filter(s => s.active).length;
+    
     // S'il n'y a pas de capteur actif, on ne peut pas calculer de moyenne
-    if (activeSensors.length === 0) {
+    if (realActiveSensorsCount === 0) {
       avgData.online = false;
       statusEl.textContent = '🔴 Aucun capteur actif';
       statusEl.style.color = '#d33';
@@ -232,7 +266,7 @@
     const sums = {};
     const counts = {};
     
-    // Calcul des sommes
+    // Calcul des sommes uniquement avec les capteurs VRAIMENT actifs
     for (const sensor of activeSensors) {
       for (const [metric, value] of Object.entries(sensor.data)) {
         // On ignore les métriques non numériques ou spéciales
@@ -258,8 +292,8 @@
     avgData.online = true;
     avgData.timestamp = now;
     
-    // Texte du statut (on le garde aussi pour la restauration)
-    const statusText = `🟢 Moyenne de ${activeSensors.length} capteur${activeSensors.length > 1 ? 's' : ''} actif${activeSensors.length > 1 ? 's' : ''}`;
+    // Texte du statut avec le nombre correct de capteurs actifs
+    const statusText = `🟢 Moyenne de ${realActiveSensorsCount} capteur${realActiveSensorsCount > 1 ? 's' : ''} actif${realActiveSensorsCount > 1 ? 's' : ''}`;
     avgData.statusText = statusText;
     
     // Mise à jour du statut
