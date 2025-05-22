@@ -149,6 +149,17 @@
       font-size: 0.9em;
     }
 
+    /* Style spécifique pour la métrique "Taille de la pousse" */
+    .metrics-grid > div[data-k="proximity"] {
+      grid-column: span 2; /* Prend deux colonnes au lieu d'une */
+      min-width: 180px;    /* Largeur minimale pour éviter le retour à la ligne */
+    }
+    
+    /* Style pour les messages d'erreur de proximité */
+    .metrics-grid > div[data-k="prox_error"] {
+      grid-column: span 2; /* Prend deux colonnes pour l'erreur également */
+    }
+
     .metric-label {
       font-weight: 600;
       color: #5f6368; /* Couleur plus douce pour les labels */

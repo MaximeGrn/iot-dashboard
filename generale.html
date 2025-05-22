@@ -95,6 +95,12 @@
       border-radius: 6px;
       font-size: 0.9em;
     }
+    
+    /* Style spécifique pour la métrique "Taille de la pousse" */
+    .metrics-grid > div[data-metric="proximity"] {
+      grid-column: span 1.5; /* Prend deux colonnes au lieu d'une */
+      min-width: 120px;    /* Largeur minimale pour éviter le retour à la ligne */
+    }
 
     .metric-label {
       font-weight: 600;
