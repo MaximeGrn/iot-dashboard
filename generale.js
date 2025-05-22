@@ -74,10 +74,20 @@
         statusEl.textContent = avgData.statusText || '🟢 Données restaurées depuis cache';
         statusEl.style.color = '#2a9d3c';
         
-        // Mise à jour des métriques textuelles
+        // Ordre défini pour les métriques
+        const orderedMetrics = ['lux', 'temp_air', 'hum_air', 'hum_sol', 'proximity'];
+        
+        // D'abord mettre à jour les métriques dans l'ordre défini
+        for (const metric of orderedMetrics) {
+          if (avgData[metric] !== undefined) {
+            updateMetric(metric, avgData[metric], avgData.timestamp, false);
+          }
+        }
+        
+        // Mise à jour des autres métriques textuelles
         for (const metric in avgData) {
           if (metric === 'online' || metric === 'timestamp' || metric === 'statusText' || 
-              metric.startsWith('prox') || metric === 'datetime_str') continue;
+              orderedMetrics.includes(metric) || metric === 'datetime_str') continue;
           
           updateMetric(metric, avgData[metric], avgData.timestamp, false);
         }
@@ -200,6 +210,17 @@
       sensors[key].active = true;
     }
     
+    // S'assurer que les données de proximité sont en tant que booléens
+    if (data.prox1 !== undefined) {
+      data.prox1 = data.prox1 === true || data.prox1 === "true";
+    }
+    if (data.prox2 !== undefined) {
+      data.prox2 = data.prox2 === true || data.prox2 === "true";
+    }
+    if (data.prox3 !== undefined) {
+      data.prox3 = data.prox3 === true || data.prox3 === "true";
+    }
+    
     // Stockage des données
     sensors[key].data = { ...sensors[key].data, ...data };
     
@@ -270,7 +291,7 @@
     for (const sensor of activeSensors) {
       for (const [metric, value] of Object.entries(sensor.data)) {
         // On ignore les métriques non numériques ou spéciales
-        if (metric === 'datetime_str' || metric.startsWith('prox') || typeof value !== 'number') {
+        if (metric === 'datetime_str' || typeof value !== 'number') {
           continue;
         }
         
@@ -281,6 +302,37 @@
         
         sums[metric] += value;
         counts[metric]++;
+      }
+      
+      // Traitement spécial pour la taille de la pousse
+      if (sensor.data.prox1 !== undefined && sensor.data.prox2 !== undefined && sensor.data.prox3 !== undefined) {
+        const prox1 = sensor.data.prox1 === true;
+        const prox2 = sensor.data.prox2 === true;
+        const prox3 = sensor.data.prox3 === true;
+        
+        // On ne traite que les cas cohérents
+        let heightValue = null;
+        
+        if (!prox1 && !prox2 && !prox3) {
+          heightValue = 0; // 0 cm
+        } else if (prox1 && !prox2 && !prox3) {
+          heightValue = 5; // 5 cm
+        } else if (prox1 && prox2 && !prox3) {
+          heightValue = 10; // 10 cm
+        } else if (prox1 && prox2 && prox3) {
+          heightValue = 15; // >15 cm, on utilise 15 pour la moyenne
+        }
+        
+        // Si hauteur valide (non incohérente), ajouter à la moyenne
+        if (heightValue !== null) {
+          if (!sums['proximity']) {
+            sums['proximity'] = 0;
+            counts['proximity'] = 0;
+          }
+          
+          sums['proximity'] += heightValue;
+          counts['proximity']++;
+        }
       }
     }
     
@@ -307,10 +359,20 @@
     
     const timestamp = avgData.timestamp;
     
-    // Mise à jour des métriques textuelles
+    // Ordre défini pour les métriques
+    const orderedMetrics = ['lux', 'temp_air', 'hum_air', 'hum_sol', 'proximity'];
+    
+    // D'abord mettre à jour les métriques dans l'ordre défini
+    for (const metric of orderedMetrics) {
+      if (avgData[metric] !== undefined) {
+        updateMetric(metric, avgData[metric], timestamp, true);
+      }
+    }
+    
+    // Ensuite mettre à jour les autres métriques qui ne sont pas dans l'ordre défini
     for (const [metric, value] of Object.entries(avgData)) {
       if (metric === 'online' || metric === 'timestamp' || metric === 'statusText' || 
-          metric.startsWith('prox') || metric === 'datetime_str') continue;
+          orderedMetrics.includes(metric) || metric === 'datetime_str') continue;
       
       updateMetric(metric, value, timestamp, true);
     }
@@ -319,13 +381,39 @@
   function updateMetric(metric, value, timestamp, shouldSave = true) {
     const label = LABELS[metric] || metric;
     
+    // Définir l'ordre d'affichage des métriques
+    const orderMap = {
+      'lux': 1,
+      'temp_air': 2,
+      'hum_air': 3,
+      'hum_sol': 4,
+      'proximity': 5
+    };
+    
     // Mise à jour du texte
     let metricEl = metricsGrid.querySelector(`[data-metric="${metric}"]`);
     if (!metricEl) {
       metricEl = document.createElement('div');
       metricEl.dataset.metric = metric;
+      metricEl.dataset.order = orderMap[metric] || 99;
       metricEl.innerHTML = `<span class="metric-label">${label}: </span><span class="metric-value"></span>`;
-      metricsGrid.appendChild(metricEl);
+      
+      // Insérer au bon endroit selon l'ordre
+      let inserted = false;
+      Array.from(metricsGrid.children).forEach(child => {
+        const childOrder = parseInt(child.dataset.order || 99);
+        const newOrder = parseInt(metricEl.dataset.order);
+        
+        if (newOrder < childOrder && !inserted) {
+          metricsGrid.insertBefore(metricEl, child);
+          inserted = true;
+        }
+      });
+      
+      // Si pas inséré, ajouter à la fin
+      if (!inserted) {
+        metricsGrid.appendChild(metricEl);
+      }
     }
     
     metricEl.querySelector('.metric-value').textContent = formatValue(metric, value);
@@ -395,7 +483,8 @@
     lux: 'Luminosité (lx)', 
     temp_air: 'Temp. Air (°C)', 
     hum_air: 'Hum. Air (%)', 
-    hum_sol: 'Hum. Sol (%)' 
+    hum_sol: 'Hum. Sol (%)',
+    proximity: 'Taille de la pousse (cm)' 
   };
   
   const DEC = { 
@@ -410,10 +499,16 @@
     lux: '#FFA500',      // Orange
     temp_air: '#007BFF', // Bleu
     hum_air: '#32CD32',  // Vert lime
-    hum_sol: '#8B4513'   // Marron
+    hum_sol: '#8B4513',  // Marron
+    proximity: '#9C27B0'  // Violet
   };
   
   function formatValue(metric, value) {
+    if (metric === 'proximity') {
+      // Format spécial pour la taille de pousse
+      if (value >= 15) return '>15 cm';
+      return `${value.toFixed(0)} cm`;
+    }
     return value.toFixed(DEC[metric] || 0);
   }
   

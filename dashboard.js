@@ -322,10 +322,18 @@
             
             // Construction du message d'erreur
             if (!prox1) {
-                if (prox2) errorMsg += 'Dysfonctionnement capteur hauteur n°1. ';
-                if (prox3) errorMsg += 'Dysfonctionnement capteur' + (prox2 ? ' hauteur n°1.' : 's hauteur n°1 et n°2.');
+                if (prox2 || prox3) {
+                    errorMsg = 'Dysfonctionnement capteur hauteur n°1';
+                    if (prox2 && prox3) {
+                        errorMsg += '.';
+                    } else if (!prox2 && prox3) {
+                        errorMsg += ' et n°2.';
+                    } else {
+                        errorMsg += '.';
+                    }
+                }
             } else if (prox1 && !prox2 && prox3) {
-                errorMsg += 'Dysfonctionnement capteur hauteur n°2.';
+                errorMsg = 'Dysfonctionnement capteur hauteur n°2.';
             }
         }
         
@@ -350,17 +358,17 @@
         }
     } else {
         // Pour nano1 (Moniteur Batterie) - comportement d'origine
-        const prox = ['prox1','prox2','prox3'].map(k=>data[k]).filter(v=>v!==undefined);
-        if (prox.length) updateMetric(node,'proximity',prox.join(' / '),ts,{textOnly:true});
+    const prox = ['prox1','prox2','prox3'].map(k=>data[k]).filter(v=>v!==undefined);
+    if (prox.length) updateMetric(node,'proximity',prox.join(' / '),ts,{textOnly:true});
 
-        for (const [k,v] of Object.entries(data)) {
-            if (k.startsWith('prox') || k === 'datetime_str') continue;
-            updateMetric(node,k,v,ts);
-        }
+    for (const [k,v] of Object.entries(data)) {
+      if (k.startsWith('prox') || k === 'datetime_str') continue;
+      updateMetric(node,k,v,ts);
+    }
 
         if (data.current !== undefined) {
-            const statusText = Number(data.current) > 1 ? 'Charge en cours' : 'Utilisation en cours';
-            updateMetric(node, 'battery_status', statusText, ts, { textOnly: true, customLabel: 'État Batterie' });
+      const statusText = Number(data.current) > 1 ? 'Charge en cours' : 'Utilisation en cours';
+      updateMetric(node, 'battery_status', statusText, ts, { textOnly: true, customLabel: 'État Batterie' });
         }
     }
   }
@@ -371,9 +379,9 @@
     
     // Création de l'élément s'il n'existe pas
     if (!metricDisplayEl) {
-        metricDisplayEl = document.createElement('div');
-        metricDisplayEl.dataset.k = k;
-        metricDisplayEl.innerHTML = `<span class="metric-label">${label}: </span><span class="metric-value"></span>`;
+      metricDisplayEl = document.createElement('div');
+      metricDisplayEl.dataset.k = k;
+      metricDisplayEl.innerHTML = `<span class="metric-label">${label}: </span><span class="metric-value"></span>`;
         
         // Définir l'ordre d'affichage des métriques
         if (node.key !== 'nano1') {
@@ -407,7 +415,7 @@
             }
         } else {
             // Pour nano1, comportement d'origine
-            node.metricsWrap.appendChild(metricDisplayEl);
+      node.metricsWrap.appendChild(metricDisplayEl);
         }
     }
     
