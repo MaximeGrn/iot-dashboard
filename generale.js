@@ -4,6 +4,7 @@
  * • Calcule et affiche les moyennes des données de tous les capteurs (nano2+)
  * • Utilise la même connexion MQTT que le dashboard
  * • Exclut volontairement nano1 (Moniteur Batterie) des calculs
+ * • Utilise sessionStorage pour conserver les données pendant la session
  */
 
 (() => {
@@ -12,6 +13,7 @@
   const credentials = { username: 'maxime', password: 'Eseo2025' };
   const CHECK_EVERY = 1_000;           // vérif chaque seconde
   const TIMEOUT     = 3_000;           // au‑delà de 3 s sans trame ➜ offline
+  const SAVE_INTERVAL = 3_000;         // sauvegarde dans sessionStorage toutes les 5 secondes
 
   /* === DOM ============================================================ */
   const averageCard = document.querySelector('#average-container .nano-card');
@@ -27,6 +29,133 @@
   const sensors = {}; // Contiendra les données de tous les capteurs sauf nano1
   const avgData = {}; // Contiendra les moyennes calculées
   const charts = {}; // Contiendra les instances des graphiques
+  
+  /* === SESSION STORAGE ================================================= */
+  function saveToSessionStorage() {
+    try {
+      // Structure des données à sauvegarder
+      const dataToSave = {
+        avgData: { ...avgData },
+        chartData: {},
+        timestamp: Date.now()
+      };
+      
+      // Sauvegarde des données des graphiques
+      for (const metric in charts) {
+        if (charts[metric] && charts[metric].data && charts[metric].data.datasets[0]) {
+          dataToSave.chartData[metric] = charts[metric].data.datasets[0].data;
+        }
+      }
+      
+      // Conversion en string JSON et sauvegarde
+      sessionStorage.setItem('generale_data', JSON.stringify(dataToSave));
+      console.log('[generale] Données sauvegardées dans sessionStorage');
+    } catch (e) {
+      console.warn('[generale] Erreur lors de la sauvegarde dans sessionStorage:', e);
+    }
+  }
+  
+  function loadFromSessionStorage() {
+    try {
+      const savedData = sessionStorage.getItem('generale_data');
+      if (!savedData) return false;
+      
+      const data = JSON.parse(savedData);
+      if (!data || !data.avgData) return false;
+      
+      console.log('[generale] Chargement des données depuis sessionStorage');
+      
+      // Restauration des données moyennes
+      Object.assign(avgData, data.avgData);
+      
+      // Mise à jour de l'interface avec les données chargées
+      if (avgData.online) {
+        statusEl.textContent = avgData.statusText || '🟢 Données restaurées depuis cache';
+        statusEl.style.color = '#2a9d3c';
+        
+        // Mise à jour des métriques textuelles
+        for (const metric in avgData) {
+          if (metric === 'online' || metric === 'timestamp' || metric === 'statusText' || 
+              metric.startsWith('prox') || metric === 'datetime_str') continue;
+          
+          updateMetric(metric, avgData[metric], avgData.timestamp, false);
+        }
+        
+        // Restauration des données des graphiques
+        if (data.chartData) {
+          for (const metric in data.chartData) {
+            if (data.chartData[metric] && data.chartData[metric].length > 0) {
+              updateChartFromCache(metric, data.chartData[metric]);
+            }
+          }
+        }
+      }
+      
+      return true;
+    } catch (e) {
+      console.warn('[generale] Erreur lors du chargement depuis sessionStorage:', e);
+      return false;
+    }
+  }
+  
+  function updateChartFromCache(metric, dataPoints) {
+    const label = LABELS[metric] || metric;
+    
+    // Création du graphique s'il n'existe pas déjà
+    let chart = charts[metric];
+    if (!chart) {
+      const canvas = document.createElement('canvas');
+      canvas.style.height = '150px';
+      canvas.style.width = '100%';
+      chartsContainer.appendChild(canvas);
+      
+      chart = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+          datasets: [{
+            label: label,
+            data: [],
+            borderColor: METRIC_COLORS[metric] || getRandomColor(),
+            borderWidth: 1,
+            tension: 0.25,
+            pointRadius: 0
+          }]
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: true,
+          scales: {
+            x: {
+              type: 'time',
+              time: {
+                unit: 'minute',
+                displayFormats: {
+                  minute: 'HH:mm',
+                  hour: 'HH:mm'
+                }
+              }
+            },
+            y: { beginAtZero: true }
+          },
+          plugins: {
+            legend: { display: true, position: 'top' }
+          }
+        }
+      });
+      charts[metric] = chart;
+    }
+    
+    // Restauration des données
+    chart.data.datasets[0].data = dataPoints;
+    chart.update('none');
+  }
+  
+  // Sauvegarde périodique des données
+  setInterval(saveToSessionStorage, SAVE_INTERVAL);
+  
+  // Sauvegarde des données avant de quitter la page
+  window.addEventListener('beforeunload', saveToSessionStorage);
   
   /* === MQTT ============================================================ */
   const client = mqtt.connect(brokerUrl, credentials);
@@ -129,8 +258,12 @@
     avgData.online = true;
     avgData.timestamp = now;
     
+    // Texte du statut (on le garde aussi pour la restauration)
+    const statusText = `🟢 Moyenne de ${activeSensors.length} capteur${activeSensors.length > 1 ? 's' : ''} actif${activeSensors.length > 1 ? 's' : ''}`;
+    avgData.statusText = statusText;
+    
     // Mise à jour du statut
-    statusEl.textContent = `🟢 Moyenne de ${activeSensors.length} capteur${activeSensors.length > 1 ? 's' : ''} actif${activeSensors.length > 1 ? 's' : ''}`;
+    statusEl.textContent = statusText;
     statusEl.style.color = '#2a9d3c';
   }
 
@@ -142,13 +275,14 @@
     
     // Mise à jour des métriques textuelles
     for (const [metric, value] of Object.entries(avgData)) {
-      if (metric === 'online' || metric === 'timestamp' || metric.startsWith('prox') || metric === 'datetime_str') continue;
+      if (metric === 'online' || metric === 'timestamp' || metric === 'statusText' || 
+          metric.startsWith('prox') || metric === 'datetime_str') continue;
       
-      updateMetric(metric, value, timestamp);
+      updateMetric(metric, value, timestamp, true);
     }
   }
   
-  function updateMetric(metric, value, timestamp) {
+  function updateMetric(metric, value, timestamp, shouldSave = true) {
     const label = LABELS[metric] || metric;
     
     // Mise à jour du texte
@@ -208,12 +342,14 @@
       charts[metric] = chart;
     }
     
-    // Ajout du point de données
-    const dataset = chart.data.datasets[0];
-    dataset.data.push({ x: timestamp, y: value });
-    
-    // Limitation à 300 points pour éviter de surcharger
-    if (dataset.data.length > 300) dataset.data.shift();
+    // Ajout du point de données seulement si ce n'est pas un chargement depuis cache
+    if (shouldSave) {
+      const dataset = chart.data.datasets[0];
+      dataset.data.push({ x: timestamp, y: value });
+      
+      // Limitation à 300 points pour éviter de surcharger
+      if (dataset.data.length > 300) dataset.data.shift();
+    }
     
     chart.update('none');
   }
@@ -253,4 +389,9 @@
   
   // Lancement du calcul périodique des moyennes
   setInterval(calculateAverages, CHECK_EVERY);
+  
+  // Tentative de restauration des données depuis sessionStorage au chargement
+  if (!loadFromSessionStorage()) {
+    console.log('[generale] Aucune donnée en cache, attente de nouvelles données MQTT');
+  }
 })(); 
