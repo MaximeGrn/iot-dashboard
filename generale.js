@@ -14,7 +14,7 @@
   const CHECK_EVERY = 1_000;           // vérif chaque seconde
   const TIMEOUT     = 3_000;           // au‑delà de 3 s sans trame ➜ offline
   const SAVE_INTERVAL = 3_000;         // sauvegarde dans sessionStorage toutes les 5 secondes
-  const CLEANUP_INTERVAL = 2_000;     // nettoyage des capteurs inactifs toutes les 10 secondes
+  const CLEANUP_INTERVAL = 1_000;     // nettoyage des capteurs inactifs toutes les 10 secondes
 
   /* === DOM ============================================================ */
   const averageCard = document.querySelector('#average-container .nano-card');

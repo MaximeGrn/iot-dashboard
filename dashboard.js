@@ -64,8 +64,20 @@
       connectedAt: node.connectedAt,
       disconnectedAt: node.disconnectedAt,
       lastSeen: node.lastSeen,
-      chartData: {}
+      chartData: {},
+      metrics: {} // Nouvel objet pour stocker les valeurs textuelles comme prox_error
     };
+    
+    // Sauvegarder les données de métriques textuelles
+    const textMetrics = node.metricsWrap.querySelectorAll('[data-k]');
+    textMetrics.forEach(el => {
+      const key = el.dataset.k;
+      const valueEl = el.querySelector('.metric-value');
+      if (valueEl && valueEl.textContent) {
+        serializableData.metrics[key] = valueEl.textContent;
+      }
+    });
+    
     for (const chartKey in node.charts) {
       if (node.charts[chartKey] && node.charts[chartKey].data && node.charts[chartKey].data.datasets[0]) {
         serializableData.chartData[chartKey] = node.charts[chartKey].data.datasets[0].data;
@@ -100,6 +112,24 @@
           
           updateStatus(node); // Met à jour l'UI et sauvegarde cette partie de l'état
 
+          // Restaurer les métriques textuelles si disponibles
+          if (storedNodeData.metrics) {
+            for (const metricKey in storedNodeData.metrics) {
+              if (Object.prototype.hasOwnProperty.call(storedNodeData.metrics, metricKey)) {
+                const metricValue = storedNodeData.metrics[metricKey];
+                if (metricValue) {
+                  // Déterminer s'il s'agit d'une métrique custom ou standard
+                  const isCustom = !LABELS[metricKey];
+                  updateMetric(node, metricKey, metricValue, undefined, {
+                    textOnly: true,
+                    customLabel: isCustom && metricKey === 'prox_error' ? 'État capteurs' : null,
+                    fromSession: true
+                  });
+                }
+              }
+            }
+          }
+
           if (storedNodeData.chartData) {
             for (const metricKey in storedNodeData.chartData) {
               if (Object.prototype.hasOwnProperty.call(storedNodeData.chartData, metricKey)) {
@@ -117,8 +147,6 @@
               }
             }
           }
-          // La sauvegarde se fait déjà dans updateStatus et updateMetric si nécessaire
-
         } catch (e) {
           console.warn('Impossible de charger le nœud depuis sessionStorage:', key, e);
         }
@@ -267,30 +295,123 @@
 
   /* === METRICS ========================================================= */
   function updateMetrics(node, data, ts) {
-    const prox = ['prox1','prox2','prox3'].map(k=>data[k]).filter(v=>v!==undefined);
-    if (prox.length) updateMetric(node,'proximity',prox.join(' / '),ts,{textOnly:true});
+    if (node.key !== 'nano1') {
+        // Pour les cartes nano2, nano3, nano4, etc. - ordre défini
+        const orderedMetrics = ['lux', 'temp_air', 'hum_air', 'hum_sol', 'proximity'];
+        
+        // Traitement spécial pour la taille de la pousse
+        const prox1 = data.prox1 === true;
+        const prox2 = data.prox2 === true;
+        const prox3 = data.prox3 === true;
+        
+        let heightText = '';
+        let errorMsg = '';
+        
+        // Détermination de la taille selon la logique demandée
+        if (!prox1 && !prox2 && !prox3) {
+            heightText = '0 cm';
+        } else if (prox1 && !prox2 && !prox3) {
+            heightText = '5 cm';
+        } else if (prox1 && prox2 && !prox3) {
+            heightText = '10 cm';
+        } else if (prox1 && prox2 && prox3) {
+            heightText = '>15 cm';
+        } else {
+            // Cas incohérent
+            heightText = 'Incohérent';
+            
+            // Construction du message d'erreur
+            if (!prox1) {
+                if (prox2) errorMsg += 'Dysfonctionnement capteur hauteur n°1. ';
+                if (prox3) errorMsg += 'Dysfonctionnement capteur' + (prox2 ? ' hauteur n°1.' : 's hauteur n°1 et n°2.');
+            } else if (prox1 && !prox2 && prox3) {
+                errorMsg += 'Dysfonctionnement capteur hauteur n°2.';
+            }
+        }
+        
+        // Mettre à jour avec la nouvelle valeur et éventuellement le message d'erreur
+        updateMetric(node, 'proximity', heightText, ts, {textOnly:true});
+        
+        // Si message d'erreur, l'afficher sous la taille
+        if (errorMsg) {
+            updateMetric(node, 'prox_error', errorMsg, ts, {textOnly:true, customLabel:'État capteurs'});
+        } else {
+            // Supprimer l'erreur si elle existait et qu'il n'y a plus d'incohérence
+            const errorEl = node.metricsWrap.querySelector('[data-k="prox_error"]');
+            if (errorEl) errorEl.remove();
+        }
+        
+        // Mettre à jour les autres métriques dans l'ordre défini
+        for (const k of orderedMetrics) {
+            if (k === 'proximity') continue; // Déjà traité ci-dessus
+            if (data[k] !== undefined) {
+                updateMetric(node, k, data[k], ts);
+            }
+        }
+    } else {
+        // Pour nano1 (Moniteur Batterie) - comportement d'origine
+        const prox = ['prox1','prox2','prox3'].map(k=>data[k]).filter(v=>v!==undefined);
+        if (prox.length) updateMetric(node,'proximity',prox.join(' / '),ts,{textOnly:true});
 
-    for (const [k,v] of Object.entries(data)) {
-      if (k.startsWith('prox') || k === 'datetime_str') continue;
-      updateMetric(node,k,v,ts);
-    }
+        for (const [k,v] of Object.entries(data)) {
+            if (k.startsWith('prox') || k === 'datetime_str') continue;
+            updateMetric(node,k,v,ts);
+        }
 
-    if (node.key === 'nano1' && data.current !== undefined) {
-      const statusText = Number(data.current) > 1 ? 'Charge en cours' : 'Utilisation en cours';
-      updateMetric(node, 'battery_status', statusText, ts, { textOnly: true, customLabel: 'État Batterie' });
+        if (data.current !== undefined) {
+            const statusText = Number(data.current) > 1 ? 'Charge en cours' : 'Utilisation en cours';
+            updateMetric(node, 'battery_status', statusText, ts, { textOnly: true, customLabel: 'État Batterie' });
+        }
     }
   }
 
   function updateMetric(node,k,raw,ts,{textOnly=false, customLabel=null, fromSession=false}={}) {
     const label = customLabel || LABELS[k] || k;
     let metricDisplayEl = node.metricsWrap.querySelector(`[data-k="${k}"]`);
+    
+    // Création de l'élément s'il n'existe pas
     if (!metricDisplayEl) {
-      metricDisplayEl = document.createElement('div');
-      metricDisplayEl.dataset.k = k;
-      metricDisplayEl.innerHTML = `<span class="metric-label">${label}: </span><span class="metric-value"></span>`;
-      node.metricsWrap.appendChild(metricDisplayEl);
+        metricDisplayEl = document.createElement('div');
+        metricDisplayEl.dataset.k = k;
+        metricDisplayEl.innerHTML = `<span class="metric-label">${label}: </span><span class="metric-value"></span>`;
+        
+        // Définir l'ordre d'affichage des métriques
+        if (node.key !== 'nano1') {
+            // Ordre pour les cartes nano2+
+            const orderMap = {
+                'lux': 1,
+                'temp_air': 2,
+                'hum_air': 3,
+                'hum_sol': 4,
+                'proximity': 5,
+                'prox_error': 6
+            };
+            
+            metricDisplayEl.dataset.order = orderMap[k] || 99;
+            
+            // Insérer au bon endroit selon l'ordre
+            let inserted = false;
+            Array.from(node.metricsWrap.children).forEach(child => {
+                const childOrder = parseInt(child.dataset.order || 99);
+                const newOrder = parseInt(metricDisplayEl.dataset.order);
+                
+                if (newOrder < childOrder && !inserted) {
+                    node.metricsWrap.insertBefore(metricDisplayEl, child);
+                    inserted = true;
+                }
+            });
+            
+            // Si pas inséré, ajouter à la fin
+            if (!inserted) {
+                node.metricsWrap.appendChild(metricDisplayEl);
+            }
+        } else {
+            // Pour nano1, comportement d'origine
+            node.metricsWrap.appendChild(metricDisplayEl);
+        }
     }
-    // N'afficher la valeur que si elle est fournie (pour éviter 'undefined' lors de la création de structure de graphique)
+    
+    // N'afficher la valeur que si elle est fournie
     if (raw !== undefined && !Array.isArray(raw)) { 
         metricDisplayEl.querySelector('.metric-value').textContent = textOnly ? raw : fmtValue(k, Number(raw));
     } else if (textOnly && raw !== undefined) {
@@ -360,7 +481,7 @@
   }
 
   /* === UTILS =========================================================== */
-  const LABELS = { voltage:'Tension (V)', current:'Courant (A)', lux:'Luminosité (lx)', temp_air:'Temp. Air (°C)', hum_air:'Hum. Air (%)', hum_sol:'Hum. Sol (%)', proximity:'Proximité 1/2/3' };
+  const LABELS = { voltage:'Tension (V)', current:'Courant (A)', lux:'Luminosité (lx)', temp_air:'Temp. Air (°C)', hum_air:'Hum. Air (%)', hum_sol:'Hum. Sol (%)', proximity:'Taille de la pousse' };
   const DEC = { voltage:2, current:2, temp_air:1 };
   const METRIC_COLORS = {
     voltage: '#FFD700', 
