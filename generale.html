@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Générale - Nano Dashboard</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f0f2f5;
+      color: #333;
+      line-height: 1.6;
+      padding-top: 70px; /* Espace pour les boutons de navigation */
+      display: flex;
+      flex-direction: column;
+      align-items: center; /* Centrer le contenu horizontalement */
+    }
+
+    .navigation-buttons {
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1001;
+      background-color: rgba(255, 255, 255, 0.95);
+      padding: 8px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      display: flex;
+      gap: 10px;
+    }
+    .navigation-buttons button {
+      padding: 8px 15px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      background-color: #f8f8f8;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      color: #333;
+      transition: background-color 0.2s ease;
+    }
+    .navigation-buttons button:hover {
+      background-color: #e7e7e7;
+    }
+    .navigation-buttons button.active {
+      background-color: #1a73e8;
+      color: white;
+      border-color: #1a73e8;
+    }
+
+    .weather-widget-container {
+      margin-top: 30px; /* Espace sous les boutons de navigation */
+      width: 80%; /* Ajustez selon la taille souhaitée du widget */
+      max-width: 700px; /* Limite la largeur maximale */
+    }
+    
+    #average-container {
+      width: 90%;
+      max-width: 900px;
+      margin: 20px auto;
+    }
+
+    .nano-card {
+      background-color: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      width: 100%;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      margin-top: 30px;
+    }
+
+    .nano-card h3 {
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: 1.2em;
+      color: #1a73e8;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+
+    .metrics-grid > div {
+      background-color: #f8f9fa;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 0.9em;
+    }
+    
+    /* Style spécifique pour la métrique "Taille de la pousse" */
+    .metrics-grid > div[data-metric="proximity"] {
+      grid-column: span 1.5; /* Prend deux colonnes au lieu d'une */
+      min-width: 120px;    /* Largeur minimale pour éviter le retour à la ligne */
+    }
+
+    .metric-label {
+      font-weight: 600;
+      color: #5f6368;
+    }
+
+    .metric-value {
+      color: #202124;
+    }
+
+    .charts-container {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        margin-top: 10px;
+    }
+
+    .charts-container canvas {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        width: 100%;
+        height: 150px;
+    }
+  </style>
+  <script src="./libs/mqtt.min.js" defer></script>
+  <script src="./libs/chart.min.js" defer></script>
+  <script src="./libs/chartjs-adapter-date-fns.min.js" defer></script>
+  <script src="generale.js" defer></script>
+</head>
+<body>
+  <div class="navigation-buttons">
+    <button onclick="location.href='index.html'">Dashboard</button>
+    <button onclick="location.href='generale.html'" class="active">Générale</button>
+    <button onclick="location.href='parametres.html'">Paramètres</button>
+  </div>
+
+  <!-- Widget météo -->
+  <div id="ww_a928169eb7796" v='1.3' loc='id' a='{"t":"horizontal","lang":"fr","sl_lpl":1,"ids":["wl4109"],"font":"Arial","sl_ics":"one_a","sl_sot":"celsius","cl_bkg":"image","cl_font":"#FFFFFF","cl_cloud":"#FFFFFF","cl_persp":"#81D4FA","cl_sun":"#FFC107","cl_moon":"#FFC107","cl_thund":"#FF5722"}'>Plus de prévisions: <a href="https://oneweather.org/fr/paris/30_jours/" id="ww_a928169eb7796_u" target="_blank">Prévisions météo 30 jours</a></div><script async src="https://app3.weatherwidget.org/js/?id=ww_a928169eb7796"></script>
+  
+  <!-- Container pour la carte de moyenne -->
+  <div id="average-container">
+    <div class="nano-card">
+      <h3>Moyenne des capteurs <span class="status"></span></h3>
+      <div class="metrics-grid"></div>
+      <div class="charts-container"></div>
+    </div>
+  </div>
+
+</body>
+</html> 

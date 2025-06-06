@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Paramètres - Nano Dashboard</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f0f2f5;
+      color: #333;
+      line-height: 1.6;
+      padding-top: 70px; /* Espace pour les boutons de navigation */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .navigation-buttons {
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1001;
+      background-color: rgba(255, 255, 255, 0.95);
+      padding: 8px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      display: flex;
+      gap: 10px;
+    }
+    .navigation-buttons button {
+      padding: 8px 15px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      background-color: #f8f8f8;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      color: #333;
+      transition: background-color 0.2s ease;
+    }
+    .navigation-buttons button:hover {
+      background-color: #e7e7e7;
+    }
+    .navigation-buttons button.active {
+      background-color: #1a73e8;
+      color: white;
+      border-color: #1a73e8;
+    }
+
+    .params-container {
+      width: 80%;
+      max-width: 700px;
+      margin: 20px auto;
+      background-color: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      padding: 20px;
+    }
+
+    h2 {
+      color: #1a73e8;
+      margin-top: 0;
+      margin-bottom: 20px;
+      font-size: 1.5em;
+    }
+
+    .server-access {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .server-btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 12px 24px;
+      background-color: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background-color 0.2s ease, transform 0.1s ease;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .server-btn:hover {
+      background-color: #1765cc;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+
+    .server-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .server-btn svg {
+      width: 20px;
+      height: 20px;
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="navigation-buttons">
+    <button onclick="location.href='index.html'">Dashboard</button>
+    <button onclick="location.href='generale.html'">Générale</button>
+    <button onclick="location.href='parametres.html'" class="active">Paramètres</button>
+  </div>
+
+  <div class="params-container">
+    <h2>Paramètres</h2>
+    
+    <div class="server-access">
+      <a href="https://connect.raspberrypi.com/devices/e8ced377-12fd-4c9d-be27-238a55029e35/screen-sharing-session" class="server-btn" target="_blank">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+          <line x1="8" y1="21" x2="16" y2="21"></line>
+          <line x1="12" y1="17" x2="12" y2="21"></line>
+        </svg>
+        Accéder au serveur
+      </a>
+    </div>
+  </div>
+</body>
+</html> 

@@ -17,6 +17,69 @@
       background-color: #f0f2f5; /* Fond légèrement différent */
       color: #333; /* Couleur de texte principale */
       line-height: 1.6;
+      padding-top: 70px; /* Augmenté pour faire de la place aux boutons de nav + cache */
+    }
+
+    .navigation-buttons {
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1001;
+      background-color: rgba(255, 255, 255, 0.95);
+      padding: 8px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      display: flex;
+      gap: 10px;
+    }
+    .navigation-buttons button {
+      padding: 8px 15px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      background-color: #f8f8f8;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      color: #333;
+      transition: background-color 0.2s ease;
+    }
+    .navigation-buttons button:hover {
+      background-color: #e7e7e7;
+    }
+    .navigation-buttons button.active {
+      background-color: #1a73e8;
+      color: white;
+      border-color: #1a73e8;
+    }
+
+    #clearCacheBtn {
+      position: fixed; /* Ou 'absolute' si vous préférez par rapport au body */
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      padding: 6px 10px; /* Taille réduite */
+      background-color: #fff;
+      border: 1px solid #ccc;
+      border-radius: 6px; /* Rayon réduit */
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px; /* Espacement réduit */
+      font-size: 13px; /* Taille de police réduite */
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      transition: background-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    #clearCacheBtn:hover {
+      background-color: #f0f0f0;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+    }
+
+    #clearCacheBtn svg {
+      width: 18px; /* Taille d'icône réduite */
+      height: 18px;
+      margin-right: 4px;
     }
 
     #dashboard {
@@ -31,7 +94,7 @@
       background-color: #ffffff; /* Fond blanc pur */
       border-radius: 12px; /* Bords plus arrondis */
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); /* Ombre plus douce et diffuse */
-      width: 350px; /* Légère augmentation de la largeur */
+      width: 400px; /* Augmentation de la largeur */
       padding: 18px; /* Augmentation du padding interne */
       display: flex;
       flex-direction: column;
@@ -74,9 +137,9 @@
 
     .metrics-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); /* Grille responsive */
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); /* Légère augmentation pour les valeurs */
       gap: 8px; /* Espacement dans la grille */
-      margin-bottom: 12px; /* Marge avant le canvas */
+      margin-bottom: 15px; /* Plus d'espace avant les graphiques */
     }
 
     .metrics-grid > div { /* Style pour chaque élément de la métrique */
@@ -84,6 +147,17 @@
       padding: 8px;
       border-radius: 6px;
       font-size: 0.9em;
+    }
+
+    /* Style spécifique pour la métrique "Taille de la pousse" */
+    .metrics-grid > div[data-k="proximity"] {
+      grid-column: span 2; /* Prend deux colonnes au lieu d'une */
+      min-width: 180px;    /* Largeur minimale pour éviter le retour à la ligne */
+    }
+    
+    /* Style pour les messages d'erreur de proximité */
+    .metrics-grid > div[data-k="prox_error"] {
+      grid-column: span 2; /* Prend deux colonnes pour l'erreur également */
     }
 
     .metric-label {
@@ -95,12 +169,18 @@
       color: #202124; /* Couleur pour les valeurs */
     }
 
-    canvas {
-      margin-top: auto; /* Pousse le canvas en bas si la carte grandit */
-      border: 1px solid #dee2e6; /* Bordure plus subtile */
-      border-radius: 8px;
-      width: 100%; /* S'assurer que le canvas prend toute la largeur */
-      /* height: 200px; */ /* Supprimé pour que maintainAspectRatio fonctionne correctement */
+    .charts-container {
+        display: flex;
+        flex-direction: column;
+        gap: 15px; /* Espace entre les graphiques individuels */
+        margin-top: 10px; /* Espace après la grille de métriques textuelles */
+    }
+
+    .charts-container canvas {
+        /* La hauteur est définie en JS (150px), la largeur est 100% par défaut */
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        width: 100%; /* S'assurer que le canvas prend toute la largeur */
     }
 
     /* Style pour le placeholder et le message Nano1 */
@@ -123,6 +203,11 @@
   </style>
 </head>
 <body>
+  <div class="navigation-buttons">
+    <button onclick="location.href='index.html'" class="active">Dashboard</button>
+    <button onclick="location.href='generale.html'">Générale</button>
+    <button onclick="location.href='parametres.html'">Paramètres</button>
+  </div>
   <div id="dashboard"></div>
 </body>
 </html>
